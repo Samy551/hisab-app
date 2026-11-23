@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ur" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>حساب کتاب</title>
+<style>
+  body{font-family:system-ui,Tahoma,sans-serif;background:#f4f6f8;margin:0;padding:12px;color:#222}
+  .wrap{max-width:720px;margin:auto}
+  h1{font-size:22px;text-align:center;margin:8px 0 12px}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .card{background:#fff;border-radius:10px;padding:10px;text-align:center;box-shadow:0 1px 3px #0001;font-size:13px}
+  .card b{display:block;font-size:16px;margin-top:4px}
+  .inc{color:#1a7f37}.exp{color:#c62828}.bal{color:#1565c0}
+  .box{background:#fff;border-radius:10px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px #0001}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  label{font-size:13px;display:block;margin-bottom:6px}
+  input,select{width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;font-size:15px}
+  button{padding:8px 12px;border:none;border-radius:6px;background:#1565c0;color:#fff;cursor:pointer;font-size:14px}
+  button.sec{background:#607d8b}
+  button.del{background:#c62828}
+  button.edit{background:#ef6c00}
+  .full{grid-column:1/-1}
+  .item{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding:8px 0;gap:8px}
+  .item small{color:#666}
+  .actions{display:flex;gap:4px;flex-shrink:0}
+  .actions button{padding:5px 8px;font-size:12px}
+  .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .hint{font-size:12px;color:#666;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>حساب کتاب</h1>
+
+  <div class="box">
+    <label>مہینہ چنیں</label>
+    <input type="month" id="month">
+  </div>
+
+  <div class="cards">
+    <div class="card">آمدن<b id="tInc" class="inc">0</b></div>
+    <div class="card">خرچ<b id="tExp" class="exp">0</b></div>
+    <div class="card">بچت<b id="tBal" class="bal">0</b></div>
+  </div>
+
+  <form id="f" class="box">
+    <div class="row">
+      <div><label>تاریخ</label><input type="date" id="date" required></div>
+      <div><label>رقم (روپے)</label><input type="number" id="amount" min="0" step="1" required></div>
+      <div>
+        <label>نوعیت</label>
+        <select id="kind">
+          <option value="خرچ">خرچ</option>
+          <option value="آمدن">آمدن</option>
+        </select>
+      </div>
+      <div>
+        <label>قسم</label>
+        <input id="cat" list="cats" placeholder="مثلاً کھانا" required>
+        <datalist id="cats">
+          <option>کھانا</option><option>بل</option><option>کرایہ</option>
+          <option>سفر</option><option>تنخواہ</option><option>کاروبار</option>
+        </datalist>
+      </div>
+      <div class="full"><label>نوٹ</label><input id="note" placeholder="اختیاری"></div>
+      <div class="full">
+        <button type="submit" id="saveBtn">محفوظ کریں</button>
+        <button type="button" id="cancelBtn" class="sec" style="display:none">منسوخ</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="box">
+    <div class="toolbar">
+      <button class="sec" id="exportBtn">ڈیٹا ایکسپورٹ (فائل)</button>
+      <button class="sec" id="importBtn">ڈیٹا امپورٹ (فائل)</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
+    <div class="hint">امپورٹ کرنے سے موجودہ ڈیٹا فائل کے ڈیٹا سے بدل جائے گا۔</div>
+  </div>
+
+  <div class="box" id="list"></div>
+</div>
+
+<script>
+  let items = JSON.parse(localStorage.getItem('hisab') || '[]');
+  let editId = null;
+  const $ = id => document.getElementById(id);
+
+  const fmt = n => Number(n).toLocaleString('en-US') + ' روپے';
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const save = () => localStorage.setItem('hisab', JSON.stringify(items));
+
+  function resetForm() {
+    editId = null;
+    $('f').reset();
+    $('date').value = todayStr();
+    $('saveBtn').textContent = 'محفوظ کریں';
+    $('cancelBtn').style.display = 'none';
+  }
+
+  function render() {
+    const m = $('month').value;
+    const list = items
+      .filter(i => !m || i.date.startsWith(m))
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    let inc = 0, exp = 0;
+    list.forEach(i => { if (i.kind === 'آمدن') inc += +i.amount; else exp += +i.amount; });
+    $('tInc').textContent = fmt(inc);
+    $('tExp').textContent = fmt(exp);
+    $('tBal').textContent = fmt(inc - exp);
+
+    if (!list.length) {
+      $('list').innerHTML = '<p>اس مہینے کوئی اندراج نہیں ہے۔</p>';
+      return;
+    }
+    $('list').innerHTML = list.map(i => `
+      <div class="item">
+        <div>
+          <b class="${i.kind === 'آمدن' ? 'inc' : 'exp'}">${esc(i.kind)} ${fmt(i.amount)}</b> — ${esc(i.cat)}
+          <br><small>${esc(i.date)} ${esc(i.note || '')}</small>
+        </div>
+        <div class="actions">
+          <button class="edit" onclick="startEdit('${i.id}')">ترمیم</button>
+          <button class="del" onclick="removeItem('${i.id}')">حذف</button>
+        </div>
+      </div>`).join('');
+  }
+
+  $('f').addEventListener('submit', e => {
+    e.preventDefault();
+    const rec = {
+      id: editId || Date.now().toString(),
+      date: $('date').value,
+      amount: $('amount').value,
+      kind: $('kind').value,
+      cat: $('cat').value.trim(),
+      note: $('note').value.trim()
+    };
+    if (editId) items = items.map(i => i.id === editId ? rec : i);
+    else items.push(rec);
+    save();
+    resetForm();
+    render();
+  });
+
+  $('cancelBtn').addEventListener('click', resetForm);
+
+  function startEdit(id) {
+    const i = items.find(x => x.id === id);
+    if (!i) return;
+    editId = id;
+    $('date').value = i.date;
+    $('amount').value = i.amount;
+    $('kind').value = i.kind;
+    $('cat').value = i.cat;
+    $('note').value = i.note || '';
+    $('saveBtn').textContent = 'تبدیلی محفوظ کریں';
+    $('cancelBtn').style.display = 'inline-block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function removeItem(id) {
+    if (!confirm('یہ اندراج حذف کریں؟')) return;
+    items = items.filter(x => x.id !== id);
+    save();
+    if (editId === id) resetForm();
+    render();
+  }
+
+  $('exportBtn').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'hisab-backup-' + todayStr() + '.json';
+    a.click();
+  });
+
+  $('importBtn').addEventListener('click', () => $('importFile').click());
+
+  $('importFile').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (!Array.isArray(data)) throw new Error('bad');
+      items = data;
+      save();
+      resetForm();
+      render();
+      alert('ڈیٹا کامیابی سے امپورٹ ہو گیا');
+    } catch (err) {
+      alert('فائل درست نہیں ہے');
+    }
+    e.target.value = '';
+  });
+
+  $('month').addEventListener('change', render);
+  $('month').value = todayStr().slice(0, 7);
+  resetForm();
+  render();
+</script>
+</body>
+</html>
