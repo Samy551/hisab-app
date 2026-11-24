@@ -15,7 +15,7 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
 
-        webView.loadUrl("file:///android_asset/index.html");
+        webView.loadUrl("https://samy551.github.io/hisab-app/");
         setContentView(webView);
     }
 }
